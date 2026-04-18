@@ -22,6 +22,8 @@ fi
 
 # Initialize variables
 ADO_PAT=""
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+CONFIG_FILE="$SCRIPT_DIR/config.yml"
 
 # Function to display usage
 usage() {
@@ -56,8 +58,31 @@ if [ -z "$ADO_PAT" ]; then
     usage
 fi
 
+# Validate Azure DevOps organization URL in config before running Terraform.
+if [ ! -f "$CONFIG_FILE" ]; then
+  echo "❌ Error: Config file not found at $CONFIG_FILE"
+  exit 1
+fi
+
+ADO_URL=$(sed -nE 's/^[[:space:]]*ado_url:[[:space:]]*"?([^"#]*)"?[[:space:]]*(#.*)?$/\1/p' "$CONFIG_FILE" | head -n 1 | xargs)
+
+if [ -z "$ADO_URL" ]; then
+  echo "❌ Error: ado_url is empty in $CONFIG_FILE"
+  echo ""
+  echo "Set ado_url to your Azure DevOps organization URL and rerun, for example:"
+  echo "  ado_url: \"https://dev.azure.com/your-organization\""
+  exit 1
+fi
+
+if [[ ! "$ADO_URL" =~ ^https://dev\.azure\.com/[^[:space:]]+$ ]]; then
+  echo "❌ Error: ado_url in $CONFIG_FILE is not a valid Azure DevOps organization URL"
+  echo "Current value: $ADO_URL"
+  echo "Expected format: https://dev.azure.com/<your-organization>"
+  exit 1
+fi
+
 # Change to the project directory where terraform files are located
-cd "$(dirname "$0")/project"
+cd "$SCRIPT_DIR/project"
 
 echo "🔄 Initializing Terraform..."
 terraform init
@@ -87,7 +112,7 @@ EXISTING_PR=$(az repos pr list \
   --org "$ORGANIZATION_URL" \
   --query "[0].pullRequestId" \
   --output tsv 2>/dev/null || echo "")
-  
+
 
 if [ -n "$EXISTING_PR" ] && [ "$EXISTING_PR" != "null" ]; then
     echo "✅ Pull request already exists with ID: $EXISTING_PR"
@@ -111,10 +136,10 @@ else
 
     if [ -n "$PR_ID" ] && [ "$PR_ID" != "null" ]; then
         echo "✅ Pull request created successfully with ID: $PR_ID"
-        
+
         # Add a comment to the pull request using the REST API
         echo "🔄 Adding comment to pull request..."
-        
+
         # Create a temporary file with the comment payload
         TEMP_FILE=$(mktemp)
         cat > "$TEMP_FILE" <<EOF
@@ -129,7 +154,7 @@ else
   "status": "active"
 }
 EOF
-        
+
         az devops invoke \
           --area git \
           --resource pullRequestThreads \
@@ -141,10 +166,10 @@ EOF
           --http-method POST \
           --in-file "$TEMP_FILE" \
           --api-version "7.0" > /dev/null || true
-        
+
         # Clean up the temporary file
         rm -f "$TEMP_FILE"
-        
+
         echo "✅ Comment added to pull request."
     else
         echo "❌ Pull request creation failed or PR ID could not be retrieved."

@@ -4,4 +4,4 @@ ado_project_name: "MigrateFromADO"
 ado_repository_name: "MigrateFromADORepo"
 
 # Update these values before running the bootstrap script
-ado_url: "https://dev.azure.com/shuntoriareid240/Migrate%20Azure%20DevOps"
+ado_url: "https://dev.azure.com/shuntoriareid240/Migrate%20Azure%20DevOps%20Repository"
